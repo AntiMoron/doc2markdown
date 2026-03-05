@@ -205,7 +205,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     resourceToken: string,
     imageMeta: Record<string, any> = {},
   ) {
-    const { imageStorageTarget } = this.params;
+    const { imageStorageTarget, disableImageCache } = this.params;
     const downloadUrl = `https://open.feishu.cn/open-apis/drive/v1/medias/${resourceToken}/download`;
     let imagePath: string;
 
@@ -227,13 +227,22 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     }
 
     if (fs.existsSync(imagePath)) {
-      return imagePath;
+      if (!disableImageCache) {
+        try {
+          const headResp = await axios.head(downloadUrl, { headers: this.getHeaders() });
+          const remoteSize = parseInt(headResp.headers["content-length"] ?? "0", 10);
+          const localSize = fs.statSync(imagePath).size;
+          if (remoteSize > 0 && remoteSize === localSize) {
+            return imagePath;
+          }
+        } catch {
+          // fall through to re-download
+        }
+      }
     }
 
     const parentDir = path.dirname(imagePath);
-    if (!fs.existsSync(parentDir)) {
-      fs.mkdirSync(parentDir, { recursive: true });
-    }
+    fs.mkdirSync(parentDir, { recursive: true });
 
     const request = axios({
       url: downloadUrl,

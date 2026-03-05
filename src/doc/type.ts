@@ -16,6 +16,12 @@ export interface HandleDocBaseParams {
    */
   imageStorageTarget?: string | ((url: string, docId: string, metaInfo: Record<string, any>) => string);
   skipImages?: boolean;
+  /**
+   * When false (default), before downloading an image the remote content-length is compared
+   * to the local file size; if they match the download is skipped.
+   * Set to true to always re-download images regardless of local state.
+   */
+  disableImageCache?: boolean;
   handleProgress?: (
     doneCount: number,
     errorCount: number,

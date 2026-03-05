@@ -151,7 +151,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
     objectId: string,
     imageMeta: Record<string, any> = {},
   ): Promise<string> {
-    const { imageStorageTarget } = this.params;
+    const { imageStorageTarget, disableImageCache } = this.params;
     let imagePath: string;
 
     if (typeof imageStorageTarget === "function") {
@@ -172,13 +172,22 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
     }
 
     if (fs.existsSync(imagePath)) {
-      return imagePath;
+      if (!disableImageCache) {
+        try {
+          const headResp = await axios.head(contentUri, { headers: this.getHeaders() });
+          const remoteSize = parseInt(headResp.headers["content-length"] ?? "0", 10);
+          const localSize = fs.statSync(imagePath).size;
+          if (remoteSize > 0 && remoteSize === localSize) {
+            return imagePath;
+          }
+        } catch {
+          // fall through to re-download
+        }
+      }
     }
 
     const parentDir = path.dirname(imagePath);
-    if (!fs.existsSync(parentDir)) {
-      fs.mkdirSync(parentDir, { recursive: true });
-    }
+    fs.mkdirSync(parentDir, { recursive: true });
 
     const request = axios({
       url: contentUri,
