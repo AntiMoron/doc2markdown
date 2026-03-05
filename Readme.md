@@ -16,7 +16,8 @@ Most knowledge lives in Feishu docs or Google Docs. Getting that content into Ma
 
 - **Feishu (飞书) → Markdown** — batch-convert an entire Feishu folder or a single doc via `appId` / `appSecret`
 - **Google Docs → Markdown** — convert Google Docs via OAuth2 credentials
-- Image download with configurable storage target (`imageStorageTarget`)
+- Image download with configurable storage target (`imageStorageTarget`), with automatic recursive directory creation
+- Image cache: by default, downloaded images are verified by comparing remote `content-length` to local file size — re-download is skipped when they match. Disable with `disableImageCache: true`
 - Skip images entirely with `skipImages: true` for faster text-only runs
 - Post-process every image URL with a `handleImage` callback (e.g. re-upload to your CDN)
 - Progress callbacks and per-doc finish hooks
@@ -134,7 +135,8 @@ getDocTaskList({
 | `docToken` | `string` | Document token / ID (alternative to `docUrl`) |
 | `folderToken` | `string` | Folder token / Drive folder ID for batch processing |
 | `skipImages` | `boolean` | Skip all images (faster text-only conversion) |
-| `imageStorageTarget` | `string \| (url, docId, meta) => string` | Directory path or function returning the full file path for downloaded images |
+| `imageStorageTarget` | `string \| (url, docId, meta) => string` | Directory path or function returning the full file path for downloaded images. Intermediate directories are created automatically. |
+| `disableImageCache` | `boolean` | When `false` (default), skips re-downloading an image if the local file size matches the remote `content-length`. Set to `true` to always re-download. |
 | `handleImage` | `(localPath) => string \| Promise<string>` | Transform the local image path before embedding in Markdown (e.g. upload to CDN) |
 | `handleProgress` | `(done, errors, total) => void` | Progress callback |
 | `onDocFinish` | `(docId, markdown, metadata?) => void` | Called when each document finishes |
@@ -151,3 +153,17 @@ PRs welcome — if you find this useful, come contribute instead of just starrin
 | Feishu (飞书)  | ✅ done |
 | Google Docs    | ✅ done |
 | Dingtalk Doc   | planned |
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=AntiMoron/feishu2markdown&type=Date)](https://star-history.com/#AntiMoron/feishu2markdown&Date)
+
+---
+
+## Contributors
+
+Thanks to everyone who has contributed to this project!
+
+[![Contributors](https://contrib.rocks/image?repo=AntiMoron/feishu2markdown)](https://github.com/AntiMoron/feishu2markdown/graphs/contributors)
