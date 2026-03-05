@@ -22,6 +22,11 @@ export interface HandleDocBaseParams {
    * Set to true to always re-download images regardless of local state.
    */
   disableImageCache?: boolean;
+  /**
+   * When true, skips the remote content-length check entirely.
+   * If the local file already exists it is returned as-is without making a HEAD request.
+   */
+  skipMediaCheck?: boolean;
   handleProgress?: (
     doneCount: number,
     errorCount: number,

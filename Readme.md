@@ -18,6 +18,7 @@ Most knowledge lives in Feishu docs or Google Docs. Getting that content into Ma
 - **Google Docs → Markdown** — convert Google Docs via OAuth2 credentials
 - Image download with configurable storage target (`imageStorageTarget`), with automatic recursive directory creation
 - Image cache: by default, downloaded images are verified by comparing remote `content-length` to local file size — re-download is skipped when they match. Disable with `disableImageCache: true`
+- Skip the remote media check entirely with `skipMediaCheck: true` — if the local file exists it is returned without any HEAD request
 - Skip images entirely with `skipImages: true` for faster text-only runs
 - Post-process every image URL with a `handleImage` callback (e.g. re-upload to your CDN)
 - Progress callbacks and per-doc finish hooks
@@ -137,6 +138,7 @@ getDocTaskList({
 | `skipImages` | `boolean` | Skip all images (faster text-only conversion) |
 | `imageStorageTarget` | `string \| (url, docId, meta) => string` | Directory path or function returning the full file path for downloaded images. Intermediate directories are created automatically. |
 | `disableImageCache` | `boolean` | When `false` (default), skips re-downloading an image if the local file size matches the remote `content-length`. Set to `true` to always re-download. |
+| `skipMediaCheck` | `boolean` | When `true`, skips the remote `content-length` check entirely — if the local file already exists it is returned immediately without making a HEAD request. |
 | `handleImage` | `(localPath) => string \| Promise<string>` | Transform the local image path before embedding in Markdown (e.g. upload to CDN) |
 | `handleProgress` | `(done, errors, total) => void` | Progress callback |
 | `onDocFinish` | `(docId, markdown, metadata?) => void` | Called when each document finishes |

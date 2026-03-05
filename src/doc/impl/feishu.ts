@@ -205,7 +205,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     resourceToken: string,
     imageMeta: Record<string, any> = {},
   ) {
-    const { imageStorageTarget, disableImageCache } = this.params;
+    const { imageStorageTarget, disableImageCache, skipMediaCheck } = this.params;
     const downloadUrl = `https://open.feishu.cn/open-apis/drive/v1/medias/${resourceToken}/download`;
     let imagePath: string;
 
@@ -227,6 +227,9 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     }
 
     if (fs.existsSync(imagePath)) {
+      if (skipMediaCheck) {
+        return imagePath;
+      }
       if (!disableImageCache) {
         try {
           const headResp = await axios.head(downloadUrl, { headers: this.getHeaders() });
