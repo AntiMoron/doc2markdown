@@ -6,6 +6,54 @@ import { Doc2MarkdownBase } from "../base";
 
 export const type: HandleDocParams["type"] = "feishu";
 
+// https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/docx-structure
+export enum FeishuBlockType {
+  Page           = 1,
+  Text           = 2,
+  Heading1       = 3,
+  Heading2       = 4,
+  Heading3       = 5,
+  Heading4       = 6,
+  Heading5       = 7,
+  Heading6       = 8,
+  Heading7       = 9,
+  Heading8       = 10,
+  Heading9       = 11,
+  Bullet         = 12,
+  Ordered        = 13,
+  Code           = 14,
+  Quote          = 15,
+  Equation       = 16,
+  Todo           = 17,
+  Bitable        = 18,
+  Callout        = 19,
+  ChatCard       = 20,
+  Diagram        = 21,
+  Divider        = 22,
+  File           = 23,
+  Grid           = 24,
+  GridColumn     = 25,
+  Iframe         = 26,
+  Image          = 27,
+  ISV            = 28,
+  Mindnote       = 29,
+  Sheet          = 30,
+  Table          = 31,
+  TableCell      = 32,
+  View           = 33,
+  QuoteContainer = 34,
+  Task           = 35,
+  OKR            = 36,
+  OKRObjective   = 37,
+  OKRKeyResult   = 38,
+  OKRProgress    = 39,
+  AddOns         = 40,
+  JiraIssue      = 41,
+  WikiCatalog    = 42,
+  Board          = 43,
+  Undefined      = 999,
+}
+
 interface ImageContentType {
   align: number;
   height: number;
@@ -152,19 +200,43 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     return data.data?.data;
   }
 
-  private async handleFeishuImage(documentId: string, resourceToken: string) {
-    const location = process.cwd();
-    const imagesDir = path.join(location, `${documentId}_images`);
-    if (!fs.existsSync(imagesDir)) {
-      fs.mkdirSync(imagesDir);
+  private async handleFeishuImage(
+    documentId: string,
+    resourceToken: string,
+    imageMeta: Record<string, any> = {},
+  ) {
+    const { imageStorageTarget } = this.params;
+    const downloadUrl = `https://open.feishu.cn/open-apis/drive/v1/medias/${resourceToken}/download`;
+    let imagePath: string;
+
+    if (typeof imageStorageTarget === "function") {
+      imagePath = imageStorageTarget(downloadUrl, documentId, {
+        token: resourceToken,
+        ...imageMeta,
+      });
+    } else {
+      const baseDir =
+        typeof imageStorageTarget === "string"
+          ? imageStorageTarget
+          : process.cwd();
+      const imagesDir = path.join(baseDir, `${documentId}_images`);
+      if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+      }
+      imagePath = path.join(imagesDir, `${resourceToken}.jpg`);
     }
-    const imagePath = path.join(imagesDir, `${resourceToken}.jpg`);
+
     if (fs.existsSync(imagePath)) {
       return imagePath;
     }
-    const apiUrl = `https://open.feishu.cn/open-apis/drive/v1/medias/${resourceToken}/download`;
+
+    const parentDir = path.dirname(imagePath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
     const request = axios({
-      url: apiUrl,
+      url: downloadUrl,
       method: "GET",
       headers: this.getHeaders(),
       responseType: "stream",
@@ -275,7 +347,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
   ): Promise<string> {
     let str = "";
     let content = "";
-    const { handleImage } = this.params;
+    const { handleImage, skipImages } = this.params;
     const {
       block_id: blockId,
       parent_id: parentId,
@@ -286,15 +358,15 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     } = block;
     let { table } = block;
     switch (block_type) {
-      case 1: // overall doc root
+      case FeishuBlockType.Page:
         break;
-      case 2: // content
+      case FeishuBlockType.Text:
         const property = block.text as BlockContentType;
         str += this.getContentFromTextBlock(property);
         break;
-      case 3: //
+      case FeishuBlockType.Heading1:
         break;
-      case 4: // heading 2
+      case FeishuBlockType.Heading2:
         const properKeys = [1, 2, 3, 4, 5].map((a) => `heading${a}`);
         for (let i = 0; i < properKeys.length; i++) {
           const k = properKeys[i];
@@ -310,13 +382,13 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
           break;
         }
         break;
-      case 27: // image
+      case FeishuBlockType.Image:
         const image = block.image;
-        if (image) {
+        if (image && !skipImages) {
           const { token, scale, width, height } = image;
           let imageUrl = token;
           await this.getCachedAccessToken();
-          imageUrl = await this.handleFeishuImage(documentId, token);
+          imageUrl = await this.handleFeishuImage(documentId, token, { scale, width, height });
           if (typeof handleImage === "function") {
             const d = handleImage(imageUrl);
             if (d instanceof Promise || typeof (d as any).then === "function") {
@@ -328,21 +400,21 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
           str += `![image](${imageUrl})`;
         }
         break;
-      case 24: // columns
+      case FeishuBlockType.Grid:
         break;
-      case 31: // table
-      case 32: // table cell
+      case FeishuBlockType.Table:
+      case FeishuBlockType.TableCell:
         break;
-      case 34: // blockquote
+      case FeishuBlockType.QuoteContainer:
         str += "> ";
         break;
-      case 19: // callout
+      case FeishuBlockType.Callout:
         break;
       default:
         break;
     }
     // columns -> table with 1row, N cols.
-    if (block_type === 24) {
+    if (block_type === FeishuBlockType.Grid) {
       table = {
         cells: children ? [...children] : [],
         property: {
@@ -353,14 +425,12 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
         },
       };
     }
-    if (block_type === 12 && bullet) {
-      // bullet
+    if (block_type === FeishuBlockType.Bullet && bullet) {
       for (let a = 0; a < depth - 1; a++) {
         str += "\t";
       }
       str += "* " + this.getContentFromTextBlock(bullet);
-    } else if (block_type === 13 && ordered) {
-      // ordered
+    } else if (block_type === FeishuBlockType.Ordered && ordered) {
       const sequence = ordered.style.sequence;
       const align = ordered.style.align;
       let seq = `${sequence}. `;
@@ -409,7 +479,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
       str += seq + this.getContentFromTextBlock(ordered);
     }
     if (
-      (block_type === 12 || block_type === 13) &&
+      (block_type === FeishuBlockType.Bullet || block_type === FeishuBlockType.Ordered) &&
       children &&
       children.length > 0
     ) {
@@ -469,11 +539,11 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
           depth + 1,
           j,
         );
-        if (block_type === 25) {
+        if (block_type === FeishuBlockType.GridColumn) {
           str += "<br>";
         } else if (
-          block_type !== 32 &&
-          block_type !== 34 &&
+          block_type !== FeishuBlockType.TableCell &&
+          block_type !== FeishuBlockType.QuoteContainer &&
           j !== children.length - 1
         ) {
           str += "\n";
@@ -481,7 +551,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
       }
     }
     // ------dont remove--------split-------//
-    if (block_type === 19) {
+    if (block_type === FeishuBlockType.Callout) {
       str = str
         .split("\n")
         .map((line) => `> ${line}`)

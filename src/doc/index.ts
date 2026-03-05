@@ -1,12 +1,16 @@
 import { LRU as LRUCache } from "tiny-lru";
 import Feishu2Markdown from "./impl/feishu";
+import GoogleDocDoc2Markdown from "./impl/googledoc";
 import { HandleDocParams } from "./type";
 import sha256 from "sha256";
 import { Doc2MarkdownBase } from "./base";
 
 const handlerCache = new LRUCache(50);
 
-const HandlerClasses: (typeof Doc2MarkdownBase)[] = [Feishu2Markdown];
+const HandlerClasses: (typeof Doc2MarkdownBase)[] = [
+  Feishu2Markdown,
+  GoogleDocDoc2Markdown,
+];
 
 function getHandlerClass(type: string): typeof Doc2MarkdownBase | undefined {
   return HandlerClasses.find((clx) => clx.type === type);

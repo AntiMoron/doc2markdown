@@ -2,11 +2,20 @@
  * Parameters for handling documents from different platforms.
  */
 export interface HandleDocBaseParams {
-  type: "feishu" | "none";
+  type: "feishu" | "googledoc" | "none";
   appId: string;
   appSecret: string;
+  refreshToken?: string;
   shouldHandleUrl?: (url: string) => Promise<boolean>;
   handleImage?: (imageUrl: string) => string | Promise<string>;
+  /**
+   * Determines where downloaded images are stored.
+   * - string: base directory; images are saved as `{dir}/{docId}_images/{filename}`
+   * - function: receives (originalUrl, docId, metaInfo) and returns the full target file path
+   * Defaults to process.cwd() when not set.
+   */
+  imageStorageTarget?: string | ((url: string, docId: string, metaInfo: Record<string, any>) => string);
+  skipImages?: boolean;
   handleProgress?: (
     doneCount: number,
     errorCount: number,
