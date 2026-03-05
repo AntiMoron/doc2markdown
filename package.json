@@ -1,6 +1,6 @@
 {
   "name": "doc2markdown",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "feishu document to markdown converter",
   "license": "MIT",
   "author": "",
@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "node ./dist/run/index.js",
     "test": "mkdir -p dist/run && tsc --esModuleInterop ./run/index.ts --outDir dist/ && cp ./run/token.json ./dist/run/token.json && node ./dist/run/index.js",
-    "clean": "rm -rf ./dist"
+    "clean": "rm -rf ./dist",
+    "prepublishOnly": "npm run build"
   },
   "types": "dist/index.d.ts",
   "dependencies": {
