@@ -35,11 +35,20 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
   }
 
   async getAccessToken(): Promise<{ expireTime: number; accessToken: string }> {
-    const { appId: clientId, appSecret: clientSecret, refreshToken } =
-      this.params as HandleDocParams & { refreshToken?: string };
+    const { apiKey, appId: clientId, appSecret: clientSecret, refreshToken } =
+      this.params as HandleDocParams & { refreshToken?: string; apiKey?: string };
+
+    // API key mode: no OAuth2 needed
+    if (apiKey) {
+      return {
+        accessToken: "",
+        expireTime: Date.now() + 365 * 24 * 3600 * 1000,
+      };
+    }
+
     if (!refreshToken) {
       throw new Error(
-        "Google Docs requires a refreshToken in params",
+        "Google Docs requires either an apiKey or a refreshToken in params",
       );
     }
     const response = await axios.post(
@@ -59,6 +68,19 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
     };
   }
 
+  private getApiKeyParams(): Record<string, string> {
+    const { apiKey } = this.params as HandleDocParams & { apiKey?: string };
+    return apiKey ? { key: apiKey } : {};
+  }
+
+  override getHeaders() {
+    const { apiKey } = this.params as HandleDocParams & { apiKey?: string };
+    if (apiKey) {
+      return { "Content-Type": "application/json; charset=utf-8" };
+    }
+    return super.getHeaders();
+  }
+
   private getDocumentIdFromUrl(url: string): string {
     const match = url.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
     if (match && match[1]) {
@@ -74,7 +96,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
       `https://www.googleapis.com/drive/v3/files/${documentId}`,
       {
         headers: this.getHeaders(),
-        params: { fields: "id,name,webViewLink" },
+        params: { fields: "id,name,webViewLink", ...this.getApiKeyParams() },
       },
     );
     const { id, name, webViewLink } = response.data;
@@ -84,7 +106,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
   async getRawDocContent(documentId: string): Promise<any> {
     const response = await axios.get(
       `https://docs.googleapis.com/v1/documents/${documentId}`,
-      { headers: this.getHeaders() },
+      { headers: this.getHeaders(), params: this.getApiKeyParams() },
     );
     return response.data;
   }
@@ -115,6 +137,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
         q: `'${folderToken}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`,
         fields: "nextPageToken,files(id,name,webViewLink)",
         pageSize,
+        ...this.getApiKeyParams(),
       };
       if (pageToken) {
         params.pageToken = pageToken;

@@ -15,7 +15,7 @@ Most knowledge lives in Feishu docs or Google Docs. Getting that content into Ma
 ## Features
 
 - **Feishu (飞书) → Markdown** — batch-convert an entire Feishu folder or a single doc via `appId` / `appSecret`
-- **Google Docs → Markdown** — convert Google Docs via OAuth2 credentials
+- **Google Docs → Markdown** — convert Google Docs via OAuth2 credentials or a simple API key (for public docs)
 - Image download with configurable storage target (`imageStorageTarget`), with automatic recursive directory creation
 - Image cache: by default, downloaded images are verified by comparing remote `content-length` to local file size — re-download is skipped when they match. Disable with `disableImageCache: true`
 - Skip the remote media check entirely with `skipMediaCheck: true` — if the local file exists it is returned without any HEAD request
@@ -80,6 +80,37 @@ handleDoc({
 
 ### Google Docs → Markdown
 
+Two authentication modes are supported:
+
+#### Option A: API Key (public docs — simplest)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**
+2. Create an **API Key**
+3. Enable the **Google Docs API** and **Google Drive API** for your project
+4. Make sure the document is shared as "Anyone with the link can view"
+
+```typescript
+import handleDoc from "doc2markdown";
+import * as fs from "fs";
+import * as path from "path";
+
+handleDoc({
+  type: "googledoc",
+  apiKey: "YOUR_GOOGLE_API_KEY",
+
+  // Single doc by URL:
+  docUrl: "https://docs.google.com/document/d/XXXXXX/edit",
+
+  onDocFinish: (docId, markdown) => {
+    fs.writeFileSync(path.resolve(process.cwd(), `${docId}.md`), markdown);
+  },
+});
+```
+
+> **Note:** API keys only work for publicly shared documents. For private docs use OAuth2 below. Inline image download also requires OAuth2; use `skipImages: true` with API key mode.
+
+#### Option B: OAuth2 (private docs)
+
 1. Create an OAuth2 client in [Google Cloud Console](https://console.cloud.google.com/)
 2. Enable the **Google Docs API** and **Google Drive API**
 3. Obtain a refresh token (e.g. via the OAuth2 Playground)
@@ -131,7 +162,8 @@ getDocTaskList({
 | `type` | `"feishu" \| "googledoc"` | Document platform |
 | `appId` | `string` | Feishu App ID or Google OAuth client ID |
 | `appSecret` | `string` | Feishu App Secret or Google OAuth client secret |
-| `refreshToken` | `string` | Google OAuth refresh token (Google Docs only) |
+| `apiKey` | `string` | Google API key for public Google Docs (no OAuth2 needed) |
+| `refreshToken` | `string` | Google OAuth refresh token (Google Docs OAuth2 only) |
 | `docUrl` | `string` | URL of a single document |
 | `docToken` | `string` | Document token / ID (alternative to `docUrl`) |
 | `folderToken` | `string` | Folder token / Drive folder ID for batch processing |
