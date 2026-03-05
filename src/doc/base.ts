@@ -30,7 +30,7 @@ export abstract class Doc2MarkdownBase {
     };
   }
 
-  getHeaders() {
+  getHeaders(): Record<string, string> {
     return {
       "Content-Type": "application/json; charset=utf-8",
       Authorization: `Bearer ${this.tokenData.accessToken}`,
