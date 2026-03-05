@@ -1,110 +1,153 @@
-# 飞书文档转Markdown
+# doc2markdown
 
-Keywords: 
+**Convert Feishu (飞书) and Google Docs documents to Markdown — automatically.**
 
-飞书文档; 飞书转Markdown; 飞书转MD; nodejs; feishu to markdown; feishu doc to markdown
+> Feishu to Markdown · Google Docs to Markdown · 飞书转Markdown · 飞书文档转MD
+
+**Keywords:** feishu to markdown, feishu doc to markdown, 飞书转markdown, 飞书文档转markdown, google docs to markdown, google doc to markdown, doc2markdown, docx to markdown, nodejs, typescript
 
 ---
 
-## 动机(Motivation)
+## Why doc2markdown?
 
-飞书转markdown还挺麻烦的
+Most knowledge lives in Feishu docs or Google Docs. Getting that content into Markdown — for static sites, RAG pipelines, LLM context, or version-controlled wikis — is painful to do by hand. `doc2markdown` automates the whole thing: authenticate once, point at a doc or folder, get clean Markdown out.
 
-## 功能(Features)
+## Features
 
-1. 根据飞书的appId, appSecrete还有文件夹token批量自动处理一组文档；也支持只处理一个文档
-2. 支持处理图片
-3. 提供接口让你方便处理整出来的图片怎么接着二次加工（如上传自己的CDN等）
-4. 复杂的排版不支持，文档最好是从上到下线性的
-5. AI编程友好，不会让他读到你的appId, appSecret
+- **Feishu (飞书) → Markdown** — batch-convert an entire Feishu folder or a single doc via `appId` / `appSecret`
+- **Google Docs → Markdown** — convert Google Docs via OAuth2 credentials
+- Image download with configurable storage target (`imageStorageTarget`)
+- Skip images entirely with `skipImages: true` for faster text-only runs
+- Post-process every image URL with a `handleImage` callback (e.g. re-upload to your CDN)
+- Progress callbacks and per-doc finish hooks
+- AI/RAG-friendly: use a Feishu or Google Drive folder as a knowledge base
 
-### 小巧思(Usages)
+## Supported Platforms
 
-1. 你可以用通过这个库把飞书的文件夹文档作为RAG的知识库
+| Platform       | Status |
+|----------------|--------|
+| Feishu (飞书)  | ✅     |
+| Google Docs    | ✅     |
+| Dingtalk Doc   | planned |
 
-### 安装方法(Installation)
+---
 
-NPM: 
+## Installation
 
 ```bash
-npm i --save feishu2markdown
+npm install doc2markdown
+# or
+yarn add doc2markdown
 ```
 
-Yarn:
+---
 
-```bash
-yarn add feishu2markdown
-```
+## Usage
 
-### 使用方法(How to use)
+### Feishu (飞书) → Markdown
 
-1. 去飞书开发者后台申请飞书内部应用 https://open.feishu.cn/
-2. 申请后，为应用申请以下权限：
-   1. docx:document:readonly
-   2. drive:drive
-   3. space:document:retrieve
-3. 如下调用进行测试
-   1. 照着 run/example_token.json下的样子，复制一个token.json出来
-   2. 把你创建的飞书应用的appId和appSecret都放进去
-   3. 执行 `npm run test` 直接做一个测试；
-      1. 成功的话会出现doc.md以及一个如`**_images`的文件夹，里面都是图片
+1. Create a Feishu internal app at https://open.feishu.cn/
+2. Grant the app these permissions:
+   - `docx:document:readonly`
+   - `drive:drive`
+   - `space:document:retrieve`
 
 ```typescript
-import handleDoc from "feishu2markdown";
-import Token from "./token.json";
-import axios from "axios";
+import handleDoc from "doc2markdown";
 import * as fs from "fs";
 import * as path from "path";
 
-const { appId, appSecret } = Token;
-
-console.log("App ID:", appId);
-console.log("App Secret:", appSecret);
-
 handleDoc({
   type: "feishu",
-  appId,
-  appSecret,
-  docUrl: 'https://xqs4y94tkg.feishu.cn/docx/G6bldPfBQo7nZ7xM3urcKtCPn5c',
-  // folderToken: 'V3gHf81UtljFX0drD44cZwzmn4b',
-  handleProgress: (completedCount, errorCount, totalCount) => {
-    console.log(
-      `Progress: ${completedCount}/${totalCount}, Errors: ${errorCount}`,
-    );
+  appId: "YOUR_APP_ID",
+  appSecret: "YOUR_APP_SECRET",
+
+  // Single doc by URL:
+  docUrl: "https://yourcompany.feishu.cn/docx/XXXXXX",
+  // Or an entire folder:
+  // folderToken: "YOUR_FOLDER_TOKEN",
+
+  handleProgress: (done, errors, total) => {
+    console.log(`${done}/${total} done, ${errors} errors`);
   },
-  handleImage: (url: string) { // local file dir
-    return url;
-  },
-  onDocFinish: (docId, markdown, metdata) => {
-    const mdDir = path.resolve(process.cwd(), `./${docId}.md`);
-    fs.writeFileSync(mdDir, markdown!);
-    console.log(`Document saved: ${mdDir}`, metdata);
+  onDocFinish: (docId, markdown) => {
+    fs.writeFileSync(path.resolve(process.cwd(), `${docId}.md`), markdown);
   },
 });
 ```
 
-获取文档列表
+### Google Docs → Markdown
+
+1. Create an OAuth2 client in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the **Google Docs API** and **Google Drive API**
+3. Obtain a refresh token (e.g. via the OAuth2 Playground)
 
 ```typescript
-import handleDoc, { getDocTaskList } from "feishu2markdwon";
+import handleDoc from "doc2markdown";
+import * as fs from "fs";
+import * as path from "path";
 
+handleDoc({
+  type: "googledoc",
+  appId: "YOUR_OAUTH_CLIENT_ID",
+  appSecret: "YOUR_OAUTH_CLIENT_SECRET",
+  refreshToken: "YOUR_REFRESH_TOKEN",
+
+  // Single doc by URL:
+  docUrl: "https://docs.google.com/document/d/XXXXXX/edit",
+  // Or an entire Drive folder:
+  // folderToken: "YOUR_DRIVE_FOLDER_ID",
+
+  handleProgress: (done, errors, total) => {
+    console.log(`${done}/${total} done, ${errors} errors`);
+  },
+  onDocFinish: (docId, markdown) => {
+    fs.writeFileSync(path.resolve(process.cwd(), `${docId}.md`), markdown);
+  },
+});
+```
+
+### Get the document task list
+
+```typescript
+import { getDocTaskList } from "doc2markdown";
 
 getDocTaskList({
-  type: "feishu",
-  appId,
-  appSecret,
-  docUrl: "https://xqs4y94tkg.feishu.cn/docx/G6bldPfBQo7nZ7xM3urcKtCPn5c",
-}).then((a) => console.log(a));
+  type: "feishu", // or "googledoc"
+  appId: "...",
+  appSecret: "...",
+  docUrl: "https://yourcompany.feishu.cn/docx/XXXXXX",
+}).then(tasks => console.log(tasks));
 ```
 
 ---
-### Roadmap
 
-不是，我发现百来人过来 clone，倒是直接过来贡献代码啊；未来我会加一个 contributor 榜单的;
-有事你也留 isuue，就当聊天了，热闹下？
+## Options
 
-|平台|完成情况|
-|---|---|
-|Google Doc|X|
-|Dingtalk Doc|X|
-|Feishu Doc|✅|
+| Option | Type | Description |
+|---|---|---|
+| `type` | `"feishu" \| "googledoc"` | Document platform |
+| `appId` | `string` | Feishu App ID or Google OAuth client ID |
+| `appSecret` | `string` | Feishu App Secret or Google OAuth client secret |
+| `refreshToken` | `string` | Google OAuth refresh token (Google Docs only) |
+| `docUrl` | `string` | URL of a single document |
+| `docToken` | `string` | Document token / ID (alternative to `docUrl`) |
+| `folderToken` | `string` | Folder token / Drive folder ID for batch processing |
+| `skipImages` | `boolean` | Skip all images (faster text-only conversion) |
+| `imageStorageTarget` | `string \| (url, docId, meta) => string` | Directory path or function returning the full file path for downloaded images |
+| `handleImage` | `(localPath) => string \| Promise<string>` | Transform the local image path before embedding in Markdown (e.g. upload to CDN) |
+| `handleProgress` | `(done, errors, total) => void` | Progress callback |
+| `onDocFinish` | `(docId, markdown, metadata?) => void` | Called when each document finishes |
+| `shouldHandleUrl` | `(url) => Promise<boolean>` | Filter which documents to process |
+
+---
+
+## Roadmap
+
+PRs welcome — if you find this useful, come contribute instead of just starring it.
+
+| Platform       | Status  |
+|----------------|---------|
+| Feishu (飞书)  | ✅ done |
+| Google Docs    | ✅ done |
+| Dingtalk Doc   | planned |
