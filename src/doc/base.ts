@@ -12,7 +12,7 @@ export abstract class Doc2MarkdownBase {
   constructor(protected readonly params: HandleDocParams) {
     this.getCachedAccessToken().then(() => {
       this.ready = true;
-    });
+    }).catch(() => {});
   }
 
   abstract getAccessToken(): Promise<typeof this.tokenData>;

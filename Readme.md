@@ -80,40 +80,15 @@ handleDoc({
 
 ### Google Docs → Markdown
 
-Two authentication modes are supported:
+Google Docs uses a **service account** for authentication — no browser OAuth dance required.
 
-#### Option A: API Key (public docs — simplest)
+#### Setup (one-time)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**
-2. Create an **API Key**
-3. Enable the **Google Docs API** and **Google Drive API** for your project
-4. Make sure the document is shared as "Anyone with the link can view"
-
-```typescript
-import handleDoc from "doc2markdown";
-import * as fs from "fs";
-import * as path from "path";
-
-handleDoc({
-  type: "googledoc",
-  apiKey: "YOUR_GOOGLE_API_KEY",
-
-  // Single doc by URL:
-  docUrl: "https://docs.google.com/document/d/XXXXXX/edit",
-
-  onDocFinish: (docId, markdown) => {
-    fs.writeFileSync(path.resolve(process.cwd(), `${docId}.md`), markdown);
-  },
-});
-```
-
-> **Note:** API keys only work for publicly shared documents. For private docs use OAuth2 below. Inline image download also requires OAuth2; use `skipImages: true` with API key mode.
-
-#### Option B: OAuth2 (private docs)
-
-1. Create an OAuth2 client in [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable the **Google Docs API** and **Google Drive API**
-3. Obtain a refresh token (e.g. via the OAuth2 Playground)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **IAM & Admin → Service Accounts** → **Create Service Account**
+2. Enable the **Google Docs API** and **Google Drive API** for your project
+3. On the service account page → **Keys → Add Key → JSON** → download the file
+4. Open the JSON file and copy `client_email` → `appId`, `private_key` → `appSecret`
+5. **Share each Google Doc** with the service account email (as Viewer) — this is required
 
 ```typescript
 import handleDoc from "doc2markdown";
@@ -122,9 +97,8 @@ import * as path from "path";
 
 handleDoc({
   type: "googledoc",
-  appId: "YOUR_OAUTH_CLIENT_ID",
-  appSecret: "YOUR_OAUTH_CLIENT_SECRET",
-  refreshToken: "YOUR_REFRESH_TOKEN",
+  appId: "my-service-account@my-project.iam.gserviceaccount.com", // client_email from JSON
+  appSecret: "-----BEGIN PRIVATE KEY-----\n...",                   // private_key from JSON
 
   // Single doc by URL:
   docUrl: "https://docs.google.com/document/d/XXXXXX/edit",
@@ -160,10 +134,8 @@ getDocTaskList({
 | Option | Type | Description |
 |---|---|---|
 | `type` | `"feishu" \| "googledoc"` | Document platform |
-| `appId` | `string` | Feishu App ID or Google OAuth client ID |
-| `appSecret` | `string` | Feishu App Secret or Google OAuth client secret |
-| `apiKey` | `string` | Google API key for public Google Docs (no OAuth2 needed) |
-| `refreshToken` | `string` | Google OAuth refresh token (Google Docs OAuth2 only) |
+| `appId` | `string` | Feishu: App ID. Google Docs: service account email (`client_email` from JSON key file) |
+| `appSecret` | `string` | Feishu: App Secret. Google Docs: service account private key (`private_key` from JSON key file) |
 | `docUrl` | `string` | URL of a single document |
 | `docToken` | `string` | Document token / ID (alternative to `docUrl`) |
 | `folderToken` | `string` | Folder token / Drive folder ID for batch processing |
@@ -175,6 +147,26 @@ getDocTaskList({
 | `handleProgress` | `(done, errors, total) => void` | Progress callback |
 | `onDocFinish` | `(docId, markdown, metadata?) => void` | Called when each document finishes |
 | `shouldHandleUrl` | `(url) => Promise<boolean>` | Filter which documents to process |
+
+---
+
+## FAQ
+
+### Google Docs: `403 The caller does not have permission`
+
+You need to **share the document with your service account email**. Open the Google Doc → Share → add the service account email (e.g. `my-sa@my-project.iam.gserviceaccount.com`) as a Viewer.
+
+### Google Docs: `appId looks like an OAuth2 client ID`
+
+Google Docs requires a **service account**, not an OAuth2 web app client. An OAuth2 client ID looks like `...apps.googleusercontent.com`. A service account email looks like `name@project.iam.gserviceaccount.com`. Create a service account in Google Cloud Console → IAM & Admin → Service Accounts.
+
+### Google Docs: can I use an API key instead of a service account?
+
+No. The Google Docs API does not support API keys — it always requires credentials that identify a principal. Use a service account.
+
+### Google Docs: images in my converted Markdown don't load
+
+Image URLs embedded by Google in a document are authenticated and tied to the document owner's credentials. A service account typically cannot download them. Use `skipImages: true` to omit images, or implement `handleImage` to replace the URLs with your own hosted copies.
 
 ---
 

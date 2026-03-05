@@ -103,8 +103,19 @@ export default async function handleDoc(params: HandleDocParams) {
           await (relief as Promise<void>);
         }
       } catch {}
-    } catch {
+    } catch (err: any) {
       errorCount += 1;
+      if (err?.response) {
+        const url = err.config?.url ?? "";
+        const status = err.response.status;
+        const msg =
+          err.response.data?.error?.message ??
+          err.response.data?.error_description ??
+          err.response.data?.error ??
+          err.response.statusText;
+        throw new Error(`API error ${status} [${url}]: ${msg}`);
+      }
+      throw err;
     }
   }
 }

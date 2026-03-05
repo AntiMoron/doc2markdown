@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
+import { createSign } from "crypto";
 import { HandleDocFolderParams, HandleDocParams } from "../type";
 import { Doc2MarkdownBase } from "../base";
 
@@ -35,50 +36,55 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
   }
 
   async getAccessToken(): Promise<{ expireTime: number; accessToken: string }> {
-    const { apiKey, appId: clientId, appSecret: clientSecret, refreshToken } =
-      this.params as HandleDocParams & { refreshToken?: string; apiKey?: string };
-
-    // API key mode: no OAuth2 needed
-    if (apiKey) {
-      return {
-        accessToken: "",
-        expireTime: Date.now() + 365 * 24 * 3600 * 1000,
-      };
-    }
-
-    if (!refreshToken) {
+    const { appId: email, appSecret: privateKey } = this.params;
+    if (!email || !privateKey) {
       throw new Error(
-        "Google Docs requires either an apiKey or a refreshToken in params",
+        "Google Docs requires a service account. Set appId to the service account email and appSecret to the private key from the downloaded JSON key file.",
       );
     }
+    if (!email.includes("iam.gserviceaccount.com")) {
+      throw new Error(
+        `appId looks like an OAuth2 client ID, not a service account email. ` +
+        `Service account emails end with @<project>.iam.gserviceaccount.com. ` +
+        `Got: ${email}`,
+      );
+    }
+    if (!privateKey.includes("BEGIN")) {
+      throw new Error(
+        `appSecret does not look like a PEM private key. ` +
+        `Copy the entire "private_key" field from the service account JSON file, ` +
+        `including the -----BEGIN PRIVATE KEY----- header.`,
+      );
+    }
+    // Normalize escaped newlines that appear in JSON key files
+    const pem = privateKey.replace(/\\n/g, "\n");
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      iss: email,
+      scope: "https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600,
+      iat: now,
+    })).toString("base64url");
+    const sign = createSign("RSA-SHA256");
+    sign.update(`${header}.${payload}`);
+    sign.end();
+    const signature = sign.sign(pem, "base64url");
+    const jwt = `${header}.${payload}.${signature}`;
     const response = await axios.post(
       "https://oauth2.googleapis.com/token",
-      {
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      },
+      { grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: jwt },
       { headers: { "Content-Type": "application/json" } },
     );
-    const { access_token, expires_in } = response.data;
-    return {
-      accessToken: access_token,
-      expireTime: Date.now() + expires_in * 1000 - 3000,
-    };
-  }
-
-  private getApiKeyParams(): Record<string, string> {
-    const { apiKey } = this.params as HandleDocParams & { apiKey?: string };
-    return apiKey ? { key: apiKey } : {};
-  }
-
-  override getHeaders() {
-    const { apiKey } = this.params as HandleDocParams & { apiKey?: string };
-    if (apiKey) {
-      return { "Content-Type": "application/json; charset=utf-8" };
+    const accessToken: string = response.data.access_token;
+    if (!accessToken) {
+      throw new Error(`Google OAuth2 token exchange succeeded but returned no access_token. Response: ${JSON.stringify(response.data)}`);
     }
-    return super.getHeaders();
+    return {
+      accessToken,
+      expireTime: Date.now() + response.data.expires_in * 1000 - 3000,
+    };
   }
 
   private getDocumentIdFromUrl(url: string): string {
@@ -94,10 +100,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
   ): Promise<{ id: string; token: string; name: string; url: string }> {
     const response = await axios.get(
       `https://www.googleapis.com/drive/v3/files/${documentId}`,
-      {
-        headers: this.getHeaders(),
-        params: { fields: "id,name,webViewLink", ...this.getApiKeyParams() },
-      },
+      { headers: this.getHeaders(), params: { fields: "id,name,webViewLink" } },
     );
     const { id, name, webViewLink } = response.data;
     return { id, token: id, name, url: webViewLink };
@@ -106,7 +109,7 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
   async getRawDocContent(documentId: string): Promise<any> {
     const response = await axios.get(
       `https://docs.googleapis.com/v1/documents/${documentId}`,
-      { headers: this.getHeaders(), params: this.getApiKeyParams() },
+      { headers: this.getHeaders() },
     );
     return response.data;
   }
@@ -122,8 +125,21 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
     }
 
     if (docToken) {
-      const metadata = await this.getDocMetadata(docToken);
-      return [{ ...metadata, type }];
+      try {
+        const metadata = await this.getDocMetadata(docToken);
+        return [{ ...metadata, type }];
+      } catch {
+        // Drive API may be unavailable (e.g. API key lacks Drive scope, or doc
+        // is public via Docs API but not Drive API).  Fall back to a minimal
+        // task so handleDocTask / onDocFinish can still run.
+        return [{
+          id: docToken,
+          token: docToken,
+          name: docToken,
+          url: `https://docs.google.com/document/d/${docToken}/edit`,
+          type,
+        }];
+      }
     }
 
     // List Google Docs files in a Drive folder
@@ -137,7 +153,6 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
         q: `'${folderToken}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`,
         fields: "nextPageToken,files(id,name,webViewLink)",
         pageSize,
-        ...this.getApiKeyParams(),
       };
       if (pageToken) {
         params.pageToken = pageToken;
@@ -321,12 +336,16 @@ export class GoogleDocDoc2Markdown extends Doc2MarkdownBase {
           let imageUrl = contentUri;
 
           if (imageStorageTarget) {
-            imageUrl = await this.downloadGoogleImage(
-              contentUri,
-              documentId,
-              objectId,
-              imageMeta,
-            );
+            try {
+              imageUrl = await this.downloadGoogleImage(
+                contentUri,
+                documentId,
+                objectId,
+                imageMeta,
+              );
+            } catch {
+              // Image not accessible (e.g. 403 from service account) — keep original URL
+            }
           }
 
           if (typeof handleImage === "function") {

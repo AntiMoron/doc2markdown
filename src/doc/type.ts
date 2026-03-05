@@ -3,14 +3,16 @@
  */
 export interface HandleDocBaseParams {
   type: "feishu" | "googledoc" | "none";
-  appId?: string;
-  appSecret?: string;
-  refreshToken?: string;
   /**
-   * Google API key for accessing public Google Docs without OAuth2.
-   * When provided for type "googledoc", OAuth2 credentials (appId/appSecret/refreshToken) are not required.
+   * For Feishu: App ID.
+   * For Google Docs: service account email (the `client_email` field from the downloaded JSON key file).
    */
-  apiKey?: string;
+  appId?: string;
+  /**
+   * For Feishu: App Secret.
+   * For Google Docs: service account private key (the `private_key` field from the downloaded JSON key file).
+   */
+  appSecret?: string;
   shouldHandleUrl?: (url: string) => Promise<boolean>;
   handleImage?: (imageUrl: string) => string | Promise<string>;
   /**
