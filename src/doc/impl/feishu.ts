@@ -6,52 +6,54 @@ import { Doc2MarkdownBase } from "../base";
 
 export const type: HandleDocParams["type"] = "feishu";
 
+const DEFAULT_FEISHU_API_BASE_URL = "https://open.feishu.cn";
+
 // https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/docx-structure
 export enum FeishuBlockType {
-  Page           = 1,
-  Text           = 2,
-  Heading1       = 3,
-  Heading2       = 4,
-  Heading3       = 5,
-  Heading4       = 6,
-  Heading5       = 7,
-  Heading6       = 8,
-  Heading7       = 9,
-  Heading8       = 10,
-  Heading9       = 11,
-  Bullet         = 12,
-  Ordered        = 13,
-  Code           = 14,
-  Quote          = 15,
-  Equation       = 16,
-  Todo           = 17,
-  Bitable        = 18,
-  Callout        = 19,
-  ChatCard       = 20,
-  Diagram        = 21,
-  Divider        = 22,
-  File           = 23,
-  Grid           = 24,
-  GridColumn     = 25,
-  Iframe         = 26,
-  Image          = 27,
-  ISV            = 28,
-  Mindnote       = 29,
-  Sheet          = 30,
-  Table          = 31,
-  TableCell      = 32,
-  View           = 33,
+  Page = 1,
+  Text = 2,
+  Heading1 = 3,
+  Heading2 = 4,
+  Heading3 = 5,
+  Heading4 = 6,
+  Heading5 = 7,
+  Heading6 = 8,
+  Heading7 = 9,
+  Heading8 = 10,
+  Heading9 = 11,
+  Bullet = 12,
+  Ordered = 13,
+  Code = 14,
+  Quote = 15,
+  Equation = 16,
+  Todo = 17,
+  Bitable = 18,
+  Callout = 19,
+  ChatCard = 20,
+  Diagram = 21,
+  Divider = 22,
+  File = 23,
+  Grid = 24,
+  GridColumn = 25,
+  Iframe = 26,
+  Image = 27,
+  ISV = 28,
+  Mindnote = 29,
+  Sheet = 30,
+  Table = 31,
+  TableCell = 32,
+  View = 33,
   QuoteContainer = 34,
-  Task           = 35,
-  OKR            = 36,
-  OKRObjective   = 37,
-  OKRKeyResult   = 38,
-  OKRProgress    = 39,
-  AddOns         = 40,
-  JiraIssue      = 41,
-  WikiCatalog    = 42,
-  Board          = 43,
-  Undefined      = 999,
+  Task = 35,
+  OKR = 36,
+  OKRObjective = 37,
+  OKRKeyResult = 38,
+  OKRProgress = 39,
+  AddOns = 40,
+  JiraIssue = 41,
+  WikiCatalog = 42,
+  Board = 43,
+  Undefined = 999,
 }
 
 interface ImageContentType {
@@ -122,8 +124,9 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
      * @param appId
      * @param appSecret
      */
+    const baseUrl = this.params.baseUrl || DEFAULT_FEISHU_API_BASE_URL;
     const apiUrl =
-      "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal";
+      `${baseUrl}/open-apis/auth/v3/tenant_access_token/internal`;
     const { appId, appSecret } = this.params;
     const data = await axios.post(
       apiUrl,
@@ -167,9 +170,9 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
   }
 
   private getDocumentIdFromUrl(url: string) {
-    const match = url.match(/docx\/([a-zA-Z0-9]+)/);
-    if (match && match[1]) {
-      return match[1];
+    const match = url.match(/(docx|wiki)\/([a-zA-Z0-9]+)/);
+    if (match && match[2]) {
+      return match[2];
     }
     throw new Error("Invalid Feishu document URL");
   }
@@ -177,7 +180,8 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
   async getDocMetadata(
     documentId: string,
   ): Promise<{ id: string; token: string; name: string }> {
-    const api = `https://open.feishu.cn/open-apis/docx/v1/documents/${documentId}`;
+    const baseUrl = this.params.baseUrl || DEFAULT_FEISHU_API_BASE_URL;
+    const api = `${baseUrl}/open-apis/docx/v1/documents/${documentId}`;
     const data = await axios.get(api, {
       headers: this.getHeaders(),
     });
@@ -193,7 +197,8 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
 
   async getRawDocContent(documentId: string): Promise<any> {
     // Impl
-    const apiUrl = `https://open.feishu.cn/open-apis/docx/v1/documents/${documentId}/blocks`;
+    const baseUrl = this.params.baseUrl || DEFAULT_FEISHU_API_BASE_URL;
+    const apiUrl = `${baseUrl}/open-apis/docx/v1/documents/${documentId}/blocks`;
     const data = await axios.get(apiUrl, {
       headers: this.getHeaders(),
     });
@@ -206,7 +211,8 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     imageMeta: Record<string, any> = {},
   ) {
     const { imageStorageTarget, disableImageCache, skipMediaCheck } = this.params;
-    const downloadUrl = `https://open.feishu.cn/open-apis/drive/v1/medias/${resourceToken}/download`;
+    const baseUrl = this.params.baseUrl || DEFAULT_FEISHU_API_BASE_URL;
+    const downloadUrl = `${baseUrl}/open-apis/drive/v1/medias/${resourceToken}/download`;
     let imagePath: string;
 
     if (typeof imageStorageTarget === "function") {
@@ -258,7 +264,7 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     await new Promise((resolve, reject) => {
       writer.on("finish", resolve as any);
       writer.on("error", reject);
-    }).catch((err) => {});
+    }).catch((err) => { });
     return imagePath;
   }
 
@@ -581,7 +587,8 @@ export class FeishuDoc2Markdown extends Doc2MarkdownBase {
     if (nextPageToken) {
       params["page_token"] = nextPageToken;
     }
-    const api = "https://open.feishu.cn/open-apis/drive/v1/files";
+    const baseUrl = this.params.baseUrl || DEFAULT_FEISHU_API_BASE_URL;
+    const api = `${baseUrl}/open-apis/drive/v1/files`;
     const request = await axios.get(api, {
       headers: this.getHeaders(),
       params,

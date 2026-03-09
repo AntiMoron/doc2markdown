@@ -3,6 +3,12 @@
  */
 export interface HandleDocBaseParams {
   type: "feishu" | "googledoc" | "none";
+
+  /**
+   * Optional base URL for API requests, useful for self-hosted or proxy setups.
+   * @description currently only supported for Feishu; Google Docs API has a fixed endpoint and does not support custom base URLs.
+   */
+  baseUrl?: string;
   /**
    * For Feishu: App ID.
    * For Google Docs: service account email (the `client_email` field from the downloaded JSON key file).

@@ -147,6 +147,7 @@ getDocTaskList({
 | `handleProgress` | `(done, errors, total) => void` | Progress callback |
 | `onDocFinish` | `(docId, markdown, metadata?) => void` | Called when each document finishes |
 | `shouldHandleUrl` | `(url) => Promise<boolean>` | Filter which documents to process |
+| `baseUrl` | `string` | Optional base URL for API requests, useful for self-hosted or proxy setups. Currently only supported for Feishu; Google Docs API has a fixed endpoint and does not support custom base URLs. |
 
 ---
 
